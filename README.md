@@ -5,4 +5,8 @@ This notebook requires ROOT to be installed.
  
 * [PPS protons in dilepton events](https://nbviewer.jupyter.org/github/antoniovilela/pps-protons-tutorial/blob/master/Dilepton-Protons.ipynb)  
 The installation of the following packages is needed to run the notebook:  
+`python3 -m pip install --user uproot4 awkward1 mplhep`  
+Or in a virtual environment:  
+`python3 -m venv myenv`  
+`. myenv/bin/activate`  
 `python3 -m pip install uproot4 awkward1 mplhep`
