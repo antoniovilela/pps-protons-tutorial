@@ -27,21 +27,21 @@ class SimpleLHCPropagator:
             self.RPInfoId_[rpid] = RPInfo_[key]
             
         self.OF_tags_ = ( "v_x",
-                         "L_x",
-                         "E_14",
-                         "x_D",
-                         "vp_x",
-                         "Lp_x",
-                         "E_24",
-                         "xp_D",
-                         "E_32",
-                         "v_y",
-                         "L_y",
-                         "y_D",
-                         "E_42",
-                         "vp_y",
-                         "Lp_y",
-                         "yp_D"
+                          "L_x",
+                          "E_14",
+                          "x_D",
+                          "vp_x",
+                          "Lp_x",
+                          "E_24",
+                          "xp_D",
+                          "E_32",
+                          "v_y",
+                          "L_y",
+                          "y_D",
+                          "E_42",
+                          "vp_y",
+                          "Lp_y",
+                          "yp_D"
                          )
         self.OF_tags_main_ = ( "x_D", "v_x", "L_x", "y_D", "v_y", "L_y" )
 
@@ -58,11 +58,18 @@ class SimpleLHCPropagator:
                     self.optical_functions_[ xangle ][ rpid ] = {}
                     for tag in self.OF_tags_main_:
                         gr_ = self.get_function( xangle, rpid, tag )
+                        # x is xi 
                         x_ = gr_.GetX()
                         y_ = gr_.GetY()
                         spl_ = ROOT.TSpline3( "{}_{}_{}".format( str(xangle), str(rpid), tag ), x_, y_, len( x_) )
                         self.optical_functions_[ xangle ][ rpid ][ tag ] = spl_
-                        
+
+                        if tag == "x_D":
+                            inv_tag_ = "xi_vs_x"
+                            inv_x_ = y_
+                            inv_y_ = x_
+                            self.optical_functions_[ xangle ][ rpid ][ inv_tag_ ] = ROOT.TSpline3( "{}_{}_{}".format( str(xangle), str(rpid), inv_tag_ ), inv_x_, inv_y_, len( inv_x_) )
+                            
         print ( self.optical_functions_ )
         print ( self.open_root_files_ )
         for file_ in self.open_root_files_:
@@ -121,6 +128,49 @@ class SimpleLHCPropagator:
         canvas_.Draw()
         return ( functions_, canvas_ )
 
+    def eval( self, rpid, xangle, tag, x ):
+
+        interpolate_ = True
+        if xangle in self.principal_xangles_:
+            interpolate_ = False
+
+        #tags_to_interpolate_ = [ "x_D" ]
+        tags_to_interpolate_ = [ "x_D", "xi_vs_x" ]
+
+        xangle1_ = None
+        xangle2_ = None
+        if interpolate_:
+            arr_ = np.array( self.principal_xangles_ )
+            if xangle < arr_[0]:
+                xangle1_ = arr_[0]
+                xangle2_ = arr_[1]
+            elif xangle > arr_[-1]:
+                xangle1_ = arr_[-2]
+                xangle2_ = arr_[-1]
+            else:
+                xangle1_ = arr_[ arr_ <= xangle ][-1]
+                xangle2_ = arr_[ arr_ >= xangle ][0]
+
+        if self.verbose_: print ( "Principal crossing angle values:", self.principal_xangles_ )        
+        if self.verbose_: print ( "Interpolate: {}".format( interpolate_ ) )   
+
+        val_ = None
+        if interpolate_ and tag in tags_to_interpolate_: 
+            function1_ = self.optical_functions_[ xangle1_ ][ rpid ][ tag ]
+            function2_ = self.optical_functions_[ xangle2_ ][ rpid ][ tag ]
+            val_ = function1_.Eval( x ) + ( function2_.Eval( x ) - function1_.Eval( x ) ) * ( xangle - xangle1_ ) / ( xangle2_ - xangle1_ )
+        else:
+            xangle_ref_ = None
+            if tag in tags_to_interpolate_:
+                xangle_ref_ = xangle
+            else:
+                xangle_ref_ = self.principal_xangles_[0]
+
+            function_ = self.optical_functions_[ xangle_ref_ ][ rpid ][ tag ]
+            val_ = function_.Eval( x )
+
+        return val_
+
     def transport( self, rpid, xangle, kinematics ):
         
         x = kinematics[0]
@@ -132,7 +182,9 @@ class SimpleLHCPropagator:
         interpolate_ = True
         if xangle in self.principal_xangles_:
             interpolate_ = False
-        
+
+        tags_to_interpolate_ = [ "x_D" ]
+
         xangle1_ = None
         xangle2_ = None
         if interpolate_:
@@ -152,13 +204,19 @@ class SimpleLHCPropagator:
         
         values_ = {}
         for tag in self.OF_tags_main_:
-            if interpolate_: 
+            if interpolate_ and tag in tags_to_interpolate_: 
                 function1_ = self.optical_functions_[ xangle1_ ][ rpid ][ tag ]
                 function2_ = self.optical_functions_[ xangle2_ ][ rpid ][ tag ]
                 val_ = function1_.Eval( xi ) + ( function2_.Eval( xi ) - function1_.Eval( xi ) ) * ( xangle - xangle1_ ) / ( xangle2_ - xangle1_ )
                 values_[ tag ] = val_
             else:
-                function_ = self.optical_functions_[ xangle ][ rpid ][ tag ]
+                xangle_ref_ = None
+                if tag in tags_to_interpolate_:
+                    xangle_ref_ = xangle
+                else:
+                    xangle_ref_ = self.principal_xangles_[0]
+
+                function_ = self.optical_functions_[ xangle_ref_ ][ rpid ][ tag ]
                 val_ = function_.Eval( xi )
                 values_[ tag ] = val_
                
